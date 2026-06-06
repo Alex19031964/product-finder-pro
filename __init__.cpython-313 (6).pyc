@@ -1,0 +1,9 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+class KeepaClient:
+    def __init__(self):
+        self.api_key = os.getenv("KEEPA_API_KEY")
+    def is_configured(self):
+        return bool(self.api_key)

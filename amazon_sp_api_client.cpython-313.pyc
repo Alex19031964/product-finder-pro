@@ -1,0 +1,30 @@
+from pathlib import Path
+import sqlite3
+import pandas as pd
+
+DB_PATH = Path("product_finder_web.db")
+
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS scans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            data_csv TEXT
+        )
+        """)
+
+def save_scan(df: pd.DataFrame):
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("INSERT INTO scans (data_csv) VALUES (?)", (df.to_csv(index=False),))
+
+def load_recent_scans(limit: int = 20) -> pd.DataFrame:
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        return pd.read_sql_query("SELECT id, created_at FROM scans ORDER BY created_at DESC LIMIT ?", conn, params=(limit,))
+
+def clear_history():
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("DELETE FROM scans")

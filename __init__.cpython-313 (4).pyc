@@ -1,0 +1,82 @@
+import pandas as pd
+
+def estimate_marketplace_fees(price: float, marketplace: str) -> float:
+    marketplace = str(marketplace).lower()
+    if "amazon" in marketplace:
+        return round((price * 0.15) + (3.25 if price < 30 else 4.95), 2)
+    if "ebay" in marketplace:
+        return round(price * 0.128 + 0.30, 2)
+    return round(price * 0.12, 2)
+
+def competition_label(score: int) -> str:
+    return "Low" if score <= 1 else "Medium" if score == 2 else "High"
+
+def opportunity_label(roi: float, sales: int, comp: int) -> str:
+    if roi >= 60 and sales >= 300 and comp <= 2:
+        return "High"
+    if roi >= 30 and sales >= 120:
+        return "Medium"
+    return "Low"
+
+def opportunity_score(roi: float, sales: int, comp: int) -> int:
+    score = 0
+    score += 40 if roi >= 80 else 34 if roi >= 60 else 26 if roi >= 40 else 15 if roi >= 25 else 0
+    score += 40 if sales >= 1500 else 32 if sales >= 700 else 24 if sales >= 300 else 12 if sales >= 120 else 0
+    score += 20 if comp <= 1 else 10 if comp == 2 else 0
+    return min(score, 100)
+
+def scan_products(supplier_df: pd.DataFrame, marketplace_df: pd.DataFrame, other_expenses: float = 1.50) -> pd.DataFrame:
+    required_supplier = {"product_name", "category", "supplier", "cost", "shipping_cost", "moq", "lead_time_days"}
+    required_market = {"product_name", "marketplace", "selling_price", "estimated_monthly_sales", "competition_score"}
+    missing_supplier = required_supplier - set(supplier_df.columns)
+    missing_market = required_market - set(marketplace_df.columns)
+    if missing_supplier:
+        raise ValueError(f"Supplier data missing columns: {', '.join(sorted(missing_supplier))}")
+    if missing_market:
+        raise ValueError(f"Marketplace data missing columns: {', '.join(sorted(missing_market))}")
+
+    market_lookup = marketplace_df.set_index("product_name").to_dict("index")
+    rows = []
+    for _, p in supplier_df.iterrows():
+        product = p["product_name"]
+        m = market_lookup.get(product, {
+            "marketplace": "Amazon UK",
+            "selling_price": float(p["cost"]) * 2.8,
+            "estimated_monthly_sales": 100,
+            "competition_score": 2,
+        })
+        price = float(m["selling_price"])
+        cost = float(p["cost"])
+        shipping = float(p["shipping_cost"])
+        sales = int(float(m["estimated_monthly_sales"]))
+        comp = int(float(m["competition_score"]))
+        fees = estimate_marketplace_fees(price, str(m["marketplace"]))
+        total = cost + shipping + fees + other_expenses
+        profit = price - total
+        roi = (profit / total * 100) if total else 0
+        rows.append({
+            "Product": product,
+            "Category": p["category"],
+            "Supplier": p["supplier"],
+            "Marketplace": m["marketplace"],
+            "Total Cost": round(total, 2),
+            "Selling Price": round(price, 2),
+            "Profit Per Unit": round(profit, 2),
+            "ROI %": round(roi, 2),
+            "Monthly Sales": sales,
+            "Monthly Revenue": round(price * sales, 2),
+            "Monthly Profit": round(profit * sales, 2),
+            "Competition": competition_label(comp),
+            "Competition Score": comp,
+            "Opportunity": opportunity_label(roi, sales, comp),
+            "Opportunity Score": opportunity_score(roi, sales, comp),
+        })
+    return pd.DataFrame(rows).sort_values(["Opportunity Score", "Monthly Profit"], ascending=False)
+
+def revenue_projection(monthly_revenue: float, growth_rate: float, months: int = 6) -> pd.DataFrame:
+    rows = []
+    current = monthly_revenue
+    for i in range(1, months + 1):
+        rows.append({"Month": f"Month {i}", "Projected Revenue": round(current, 2)})
+        current *= 1 + growth_rate
+    return pd.DataFrame(rows)

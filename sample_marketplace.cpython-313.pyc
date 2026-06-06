@@ -1,0 +1,9 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+class EbayClient:
+    def __init__(self):
+        self.token = os.getenv("EBAY_ACCESS_TOKEN")
+    def is_configured(self):
+        return bool(self.token)
